@@ -3,6 +3,8 @@
 add_library(sysmon_core STATIC
     metrics_collector.cpp
     platform_factory.cpp
+    alert_config.cpp
+    alert_manager.cpp
 )
 
 target_include_directories(sysmon_core PUBLIC

@@ -96,6 +96,12 @@ void MetricsCollector::UpdateMetrics() {
         }
     }
     
+    // Send to alert manager for threshold checking
+    if (alert_manager_) {
+        alert_manager_->EvaluateCPUMetrics(cpu_metrics);
+        alert_manager_->EvaluateMemoryMetrics(memory_metrics);
+    }
+    
     // Notify callbacks
     for (auto& callback : callbacks_) {
         try {
@@ -122,6 +128,10 @@ std::vector<ProcessInfo> MetricsCollector::GetProcessList() const {
 
 void MetricsCollector::RegisterCallback(MetricCallback callback) {
     callbacks_.push_back(std::move(callback));
+}
+
+void MetricsCollector::SetAlertManager(std::shared_ptr<AlertManager> alert_manager) {
+    alert_manager_ = alert_manager;
 }
 
 } // namespace sysmon

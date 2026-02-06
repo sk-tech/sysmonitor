@@ -1,5 +1,6 @@
 #include "sysmon/platform_interface.hpp"
 #include "sysmon/metrics_storage.hpp"
+#include "sysmon/alert_manager.hpp"
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -71,6 +72,11 @@ public:
      */
     void RegisterCallback(MetricCallback callback);
     
+    /**
+     * @brief Set alert manager for threshold monitoring
+     */
+    void SetAlertManager(std::shared_ptr<AlertManager> alert_manager);
+    
 private:
     void CollectionLoop();
     void UpdateMetrics();
@@ -78,6 +84,7 @@ private:
     std::unique_ptr<IProcessMonitor> process_monitor_;
     std::unique_ptr<ISystemMetrics> system_metrics_;
     std::unique_ptr<MetricsStorage> storage_;  // Optional storage backend
+    std::shared_ptr<AlertManager> alert_manager_;  // Optional alert manager
     
     std::atomic<bool> running_{false};
     std::thread collection_thread_;

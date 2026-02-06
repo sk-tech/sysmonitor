@@ -21,6 +21,10 @@ struct ProcessInfo {
     uint32_t num_threads;
     int64_t start_time;         // Unix timestamp
     std::string state;          // Running, Sleeping, Zombie, etc.
+    std::string username;       // Process owner
+    uint64_t read_bytes;        // Disk I/O
+    uint64_t write_bytes;
+    uint32_t open_files;        // Number of open file descriptors
 };
 
 struct CPUMetrics {

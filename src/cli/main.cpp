@@ -1,5 +1,6 @@
 #include "sysmon/platform_interface.hpp"
 #include "sysmon/metrics_storage.hpp"
+#include "sysmon/alert_manager.hpp"
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -168,6 +169,89 @@ void print_history(const std::string& metric_type, const std::string& duration, 
     }
 }
 
+void print_alert_status() {
+    std::cout << "\nAlert System Status" << std::endl;
+    std::cout << "===================" << std::endl;
+    
+    // Check if alerts.yaml exists
+    std::filesystem::path config_path;
+    const char* home = std::getenv("HOME");
+    if (home) {
+        config_path = std::filesystem::path(home) / ".sysmon" / "alerts.yaml";
+    }
+    
+    if (!std::filesystem::exists(config_path)) {
+        std::cout << "No alert configuration found at: " << config_path << std::endl;
+        std::cout << "Copy config/alerts.yaml.example to " << config_path << " to enable alerts" << std::endl;
+        return;
+    }
+    
+    sysmon::AlertConfig alert_config;
+    if (!alert_config.LoadFromFile(config_path.string())) {
+        std::cerr << "Failed to load alert configuration" << std::endl;
+        return;
+    }
+    
+    auto global = alert_config.GetGlobalConfig();
+    std::cout << "Configuration: " << config_path << std::endl;
+    std::cout << "Status: " << (global.enabled ? "Enabled" : "Disabled") << std::endl;
+    std::cout << "Check Interval: " << global.check_interval << " seconds" << std::endl;
+    std::cout << "Cooldown: " << global.cooldown << " seconds" << std::endl;
+    std::cout << "\nConfigured Alerts (" << alert_config.GetSystemAlerts().size() << "):" << std::endl;
+    std::cout << std::string(80, '-') << std::endl;
+    
+    for (const auto& rule : alert_config.GetSystemAlerts()) {
+        std::cout << "• " << rule.name << " [" 
+                  << sysmon::AlertConfig::SeverityToString(rule.severity) << "]" << std::endl;
+        std::cout << "  Metric: " << rule.metric << std::endl;
+        std::cout << "  Condition: " << sysmon::AlertConfig::ConditionToString(rule.condition) 
+                  << " " << rule.threshold << std::endl;
+        std::cout << "  Duration: " << rule.duration_seconds << " seconds" << std::endl;
+        std::cout << "  Description: " << rule.description << std::endl;
+        std::cout << std::endl;
+    }
+    
+    // Check alert log
+    std::filesystem::path log_path;
+    if (home) {
+        log_path = std::filesystem::path(home) / ".sysmon" / "alerts.log";
+        if (std::filesystem::exists(log_path)) {
+            auto size = std::filesystem::file_size(log_path);
+            std::cout << "Alert Log: " << log_path << " (" << (size / 1024) << " KB)" << std::endl;
+        }
+    }
+}
+
+void test_alert_config(const std::string& config_file) {
+    std::cout << "\nTesting Alert Configuration" << std::endl;
+    std::cout << "============================" << std::endl;
+    
+    sysmon::AlertManager alert_manager;
+    if (!alert_manager.LoadConfig(config_file)) {
+        std::cerr << "Failed to load configuration from: " << config_file << std::endl;
+        return;
+    }
+    
+    std::cout << "✓ Configuration loaded successfully" << std::endl;
+    
+    // Get current metrics
+    auto system_metrics = sysmon::CreateSystemMetrics();
+    auto cpu = system_metrics->GetCPUMetrics();
+    auto mem = system_metrics->GetMemoryMetrics();
+    
+    std::cout << "\nCurrent Metrics:" << std::endl;
+    std::cout << "  CPU Usage: " << cpu.total_usage << "%" << std::endl;
+    std::cout << "  Memory Usage: " << mem.usage_percent << "%" << std::endl;
+    std::cout << "  Available Memory: " << (mem.available_bytes / 1024 / 1024) << " MB" << std::endl;
+    
+    // Test evaluation (dry run)
+    alert_manager.EvaluateCPUMetrics(cpu);
+    alert_manager.EvaluateMemoryMetrics(mem);
+    
+    std::cout << "\n✓ Alert evaluation test complete" << std::endl;
+    std::cout << "Note: Alerts would fire after sustained threshold breaches" << std::endl;
+}
+
 void print_usage() {
     std::cout << "SysMonitor CLI v0.1.0" << std::endl;
     std::cout << "\nUsage: sysmon <command> [options]" << std::endl;
@@ -183,6 +267,11 @@ void print_usage() {
     std::cout << "              sysmon history cpu.total_usage 1h 20" << std::endl;
     std::cout << "              sysmon history memory.usage_percent 24h" << std::endl;
     std::cout << "            Duration: 1h, 30m, 24h, 7d (default: 1h)" << std::endl;
+    std::cout << std::endl;
+    std::cout << "  alerts" << std::endl;
+    std::cout << "            Show alert status and configuration" << std::endl;
+    std::cout << "  test-alert <config_file>" << std::endl;
+    std::cout << "            Test alert configuration with current metrics" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -217,6 +306,15 @@ int main(int argc, char* argv[]) {
             std::string duration = (argc > 3) ? argv[3] : "1h";
             int limit = (argc > 4) ? std::stoi(argv[4]) : 50;
             print_history(metric_type, duration, limit);
+        } else if (command == "alerts") {
+            print_alert_status();
+        } else if (command == "test-alert") {
+            if (argc < 3) {
+                std::cerr << "Error: Config file required" << std::endl;
+                std::cerr << "Usage: sysmon test-alert <config_file>" << std::endl;
+                return 1;
+            }
+            test_alert_config(argv[2]);
         } else {
             std::cerr << "Unknown command: " << command << std::endl;
             print_usage();

@@ -3,9 +3,9 @@
 [![CI/CD](https://github.com/yourusername/sysmonitor/workflows/Multi-Platform%20CI%2FCD/badge.svg)](https://github.com/yourusername/sysmonitor/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)](README.md)
-[![Version](https://img.shields.io/badge/version-0.3.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-green)](CHANGELOG.md)
 
-A production-grade system monitoring tool with real-time metrics collection, time-series storage, web dashboard, and RESTful API. Built with C++17 for performance-critical operations and Python for web services, demonstrating modern software engineering practices.
+A production-grade system monitoring tool with real-time metrics collection, time-series storage, threshold-based alerting, web dashboard, and RESTful API. Built with C++17 for performance-critical operations and Python for web services, demonstrating modern software engineering practices.
 
 ## 🎯 Project Goals
 
@@ -16,22 +16,25 @@ A production-grade system monitoring tool with real-time metrics collection, tim
 
 ## ✨ Features
 
-### Current (v0.3.0) ✅
+### Current (v0.4.0) ✅
 - **Real-time Monitoring**: CPU, memory, disk, network, and process metrics
 - **Time-Series Storage**: SQLite database with 1-second resolution, multi-tier retention
+- **Threshold Alerting**: YAML-based alert rules with duration thresholds and cooldown
+- **Notification System**: Log, webhook, and email notifications (extensible plugin architecture)
 - **Web Dashboard**: Interactive real-time dashboard with live charts
 - **REST API**: RESTful endpoints for historical queries and metric retrieval
-- **CLI Tools**: Command-line interface for querying metrics and history
-- **Zero Dependencies**: API server runs with Python standard library only
+- **CLI Tools**: Command-line interface for querying metrics, history, and alert status
+- **Zero Dependencies**: Core system and API server run with minimal external dependencies
 
 ### Completed Milestones
 - [x] Week 1: Core infrastructure and build system
 - [x] Week 2: Data collection and time-series storage (SQLite)
 - [x] Week 3: Web dashboard with REST API and real-time streaming
+- [x] Week 4: Alerting system with threshold-based notifications
 
 ### Upcoming
-- [ ] Week 4: Alerting and anomaly detection
-- [ ] Week 5+: Distributed monitoring and advanced features
+- [ ] Week 5: Distributed multi-host monitoring
+- [ ] Week 6+: Advanced anomaly detection and analytics
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -105,6 +108,21 @@ python3 python/sysmon/api/server.py 8000
 **Query historical data:**
 ```bash
 ./build/bin/sysmon history memory.usage_percent 24h 100
+```
+
+**Configure and monitor alerts:**
+```bash
+# Copy example configuration
+cp config/alerts.yaml.example ~/.sysmon/alerts.yaml
+
+# Edit alert thresholds
+nano ~/.sysmon/alerts.yaml
+
+# View configured alerts
+./build/bin/sysmon alerts
+
+# Monitor alert log
+tail -f ~/.sysmon/alerts.log
 ```
 
 **Web Dashboard:**
