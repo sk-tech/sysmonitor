@@ -6,6 +6,14 @@ namespace sysmon {
 MetricsCollector::MetricsCollector()
     : process_monitor_(CreateProcessMonitor()),
       system_metrics_(CreateSystemMetrics()),
+      storage_(nullptr),
+      interval_ms_(1000) {
+}
+
+MetricsCollector::MetricsCollector(const StorageConfig& storage_config)
+    : process_monitor_(CreateProcessMonitor()),
+      system_metrics_(CreateSystemMetrics()),
+      storage_(std::make_unique<MetricsStorage>(storage_config)),
       interval_ms_(1000) {
 }
 
@@ -69,6 +77,23 @@ void MetricsCollector::UpdateMetrics() {
         std::lock_guard<std::mutex> lock(metrics_mutex_);
         latest_cpu_ = cpu_metrics;
         latest_memory_ = memory_metrics;
+    }
+    
+    // Write to storage if enabled (batched, non-blocking)
+    if (storage_) {
+        storage_->WriteCPUMetrics(cpu_metrics);
+        storage_->WriteMemoryMetrics(memory_metrics);
+        
+        // Optionally collect and store disk/network metrics
+        try {
+            auto disk_metrics = system_metrics_->GetDiskMetrics();
+            storage_->WriteDiskMetrics(disk_metrics);
+            
+            auto network_metrics = system_metrics_->GetNetworkMetrics();
+            storage_->WriteNetworkMetrics(network_metrics);
+        } catch (const std::exception& e) {
+            std::cerr << "Error collecting disk/network metrics: " << e.what() << std::endl;
+        }
     }
     
     // Notify callbacks

@@ -6,6 +6,7 @@ add_executable(sysmond
 
 target_link_libraries(sysmond PRIVATE
     sysmon_core
+    sysmon_storage
     Threads::Threads
 )
 

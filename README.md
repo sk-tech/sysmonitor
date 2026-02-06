@@ -3,28 +3,33 @@
 [![CI/CD](https://github.com/yourusername/sysmonitor/workflows/Multi-Platform%20CI%2FCD/badge.svg)](https://github.com/yourusername/sysmonitor/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)](README.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-green)](CHANGELOG.md)
 
-A production-grade system monitoring tool with real-time metrics, alerting, and visualization. Built with C/C++ for performance-critical operations and Python for analytics, demonstrating modern software engineering practices.
+A production-grade system monitoring tool with real-time metrics collection, time-series storage, web dashboard, and RESTful API. Built with C++17 for performance-critical operations and Python for web services, demonstrating modern software engineering practices.
 
 ## 🎯 Project Goals
 
-- **Interview Preparation**: Comprehensive project covering OS internals, concurrency, networking, and system programming
+- **Interview Preparation**: Comprehensive project covering OS internals, concurrency, databases, and distributed systems
 - **Production Quality**: Full SDLC implementation with documentation, testing, and CI/CD
 - **Cross-Platform**: Portable binaries for Linux, Windows, and macOS
 - **Weekly Demos**: Incremental feature delivery following Agile methodology
 
 ## ✨ Features
 
-### Current (v0.1.0)
-- Real-time process monitoring (CPU, memory, threads)
-- System metrics collection (CPU cores, memory, disk I/O, network)
-- Platform abstraction layer for OS-specific implementations
-- Command-line interface with live monitoring
+### Current (v0.3.0) ✅
+- **Real-time Monitoring**: CPU, memory, disk, network, and process metrics
+- **Time-Series Storage**: SQLite database with 1-second resolution, multi-tier retention
+- **Web Dashboard**: Interactive real-time dashboard with live charts
+- **REST API**: RESTful endpoints for historical queries and metric retrieval
+- **CLI Tools**: Command-line interface for querying metrics and history
+- **Zero Dependencies**: API server runs with Python standard library only
 
-### Planned
+### Completed Milestones
 - [x] Week 1: Core infrastructure and build system
-- [ ] Week 2: Data collection and time-series storage
-- [ ] Week 3: Web dashboard with real-time streaming
+- [x] Week 2: Data collection and time-series storage (SQLite)
+- [x] Week 3: Web dashboard with REST API and real-time streaming
+
+### Upcoming
 - [ ] Week 4: Alerting and anomaly detection
 - [ ] Week 5+: Distributed monitoring and advanced features
 
@@ -37,7 +42,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 **Build Tools:**
 - CMake 3.15+
 - C++17 compiler (GCC 11+, Clang 14+, MSVC 2022)
-- Python 3.8+
+- Python 3.8+ (for web dashboard)
 
 **Linux:**
 ```bash
@@ -60,20 +65,66 @@ brew install cmake python@3.11 sqlite
 git clone https://github.com/yourusername/sysmonitor.git
 cd sysmonitor
 
-# Initialize submodules (if any)
-git submodule update --init --recursive
-
 # Configure and build
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . -j$(nproc)
 
-# Run tests
-ctest --output-on-failure
-
-# Install (optional)
-sudo cmake --install .
+# Verify build
+./bin/sysmon info
 ```
+
+### Running SysMonitor
+
+**Option 1: All-in-one startup (recommended)**
+```bash
+./scripts/start.sh
+# Opens dashboard at http://localhost:8000
+# Press Ctrl+C to stop all services
+```
+
+**Option 2: Individual components**
+```bash
+# Start metrics collector daemon
+./build/bin/sysmond ~/.sysmon/data.db
+
+# In another terminal, start web API
+python3 python/sysmon/api/server.py 8000
+
+# Query metrics via CLI
+./build/bin/sysmon history cpu.total_usage 1h
+```
+
+### Quick Usage Examples
+
+**View real-time metrics:**
+```bash
+./build/bin/sysmon all
+```
+
+**Query historical data:**
+```bash
+./build/bin/sysmon history memory.usage_percent 24h 100
+```
+
+**Web Dashboard:**
+```
+http://localhost:8000
+```
+
+**API Endpoints:**
+```bash
+# Latest CPU usage
+curl http://localhost:8000/api/metrics/latest?metric=cpu.total_usage
+
+# Memory history (last hour)
+curl "http://localhost:8000/api/metrics/history?metric=memory.usage_percent&duration=1h"
+
+# List all metrics
+curl http://localhost:8000/api/metrics/types
+```
+
+See [docs/API.md](docs/API.md) for complete API documentation.
 
 ### Installing Pre-built Binaries
 

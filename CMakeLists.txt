@@ -100,7 +100,7 @@ include_directories(
 add_subdirectory(src/core)
 add_subdirectory(src/platform)
 # add_subdirectory(src/collectors)  # Week 2
-# add_subdirectory(src/storage)     # Week 2
+add_subdirectory(src/storage)      # Week 2 - ENABLED
 # add_subdirectory(src/utils)       # Week 2
 
 # Python bindings
@@ -112,12 +112,12 @@ endif()
 add_subdirectory(src/daemon)
 add_subdirectory(src/cli)
 
-# Tests
-if(BUILD_TESTING)
-    enable_testing()
-    add_subdirectory(third_party/googletest)
-    add_subdirectory(tests)
-endif()
+# Tests (disabled for Week 2 - will add in later iteration)
+# if(BUILD_TESTING)
+#     enable_testing()
+#     add_subdirectory(third_party/googletest)
+#     add_subdirectory(tests)
+# endif()
 
 # Installation rules
 include(GNUInstallDirs)

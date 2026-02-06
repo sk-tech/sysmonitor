@@ -1,9 +1,11 @@
 #include "sysmon/platform_interface.hpp"
+#include "sysmon/metrics_storage.hpp"
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <chrono>
 #include <functional>
+#include <memory>
 
 namespace sysmon {
 
@@ -17,7 +19,16 @@ class MetricsCollector {
 public:
     using MetricCallback = std::function<void(const CPUMetrics&, const MemoryMetrics&)>;
     
+    /**
+     * @brief Construct collector without storage
+     */
     MetricsCollector();
+    
+    /**
+     * @brief Construct collector with storage enabled
+     * @param storage_config Storage configuration
+     */
+    explicit MetricsCollector(const StorageConfig& storage_config);
     ~MetricsCollector();
     
     // Non-copyable, non-movable
@@ -66,6 +77,7 @@ private:
     
     std::unique_ptr<IProcessMonitor> process_monitor_;
     std::unique_ptr<ISystemMetrics> system_metrics_;
+    std::unique_ptr<MetricsStorage> storage_;  // Optional storage backend
     
     std::atomic<bool> running_{false};
     std::thread collection_thread_;
