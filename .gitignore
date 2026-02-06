@@ -1,0 +1,84 @@
+# Configuration file
+config.yaml
+sysmon.yaml
+
+# Build directories
+build/
+build-*/
+cmake-build-*/
+out/
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.obj
+*.o
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Package files
+*.deb
+*.rpm
+*.msi
+*.dmg
+*.tar.gz
+*.zip
+
+# Test outputs
+Testing/
+test_results/
+coverage.info
+
+# Generated documentation
+docs/_build/
+docs/html/
+docs/latex/
+
+# OS-specific
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Temporary files
+tmp/
+temp/
+*.tmp

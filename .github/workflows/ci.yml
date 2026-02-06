@@ -1,0 +1,278 @@
+name: Multi-Platform CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [ published ]
+
+env:
+  BUILD_TYPE: Release
+  CTEST_OUTPUT_ON_FAILURE: 1
+
+jobs:
+  # ============================================
+  # Linux Build (Ubuntu)
+  # ============================================
+  build-linux:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        arch: [x86_64]
+        compiler: [gcc-11, clang-14]
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake ninja-build \
+          libsqlite3-dev \
+          python3-dev python3-pip \
+          valgrind lcov
+        
+        if [ "${{ matrix.compiler }}" == "clang-14" ]; then
+          sudo apt-get install -y clang-14
+          echo "CC=clang-14" >> $GITHUB_ENV
+          echo "CXX=clang++-14" >> $GITHUB_ENV
+        else
+          sudo apt-get install -y g++-11
+          echo "CC=gcc-11" >> $GITHUB_ENV
+          echo "CXX=g++-11" >> $GITHUB_ENV
+        fi
+        
+        pip3 install pybind11 pytest pytest-cov
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DBUILD_TESTING=ON \
+          -DENABLE_SANITIZERS=OFF \
+          -DSTATIC_LINK_RUNTIME=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j$(nproc)
+    
+    - name: Run C++ Tests
+      run: |
+        cd build
+        ctest --output-on-failure -C ${{ env.BUILD_TYPE }}
+    
+    - name: Run Python Tests
+      run: |
+        cd python
+        pytest tests/ -v --cov=sysmon --cov-report=xml
+    
+    - name: Generate Coverage Report
+      if: matrix.compiler == 'gcc-11'
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/third_party/*' '*/tests/*' --output-file coverage.info
+        lcov --list coverage.info
+    
+    - name: Upload Coverage to Codecov
+      if: matrix.compiler == 'gcc-11'
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.info
+        flags: cpp-linux
+    
+    - name: Package (.deb)
+      run: |
+        cd build
+        cpack -G DEB
+        cpack -G TGZ
+    
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-linux-${{ matrix.arch }}-${{ matrix.compiler }}
+        path: |
+          build/*.deb
+          build/*.tar.gz
+
+  # ============================================
+  # Windows Build
+  # ============================================
+  build-windows:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        arch: [x64]
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pybind11 pytest pytest-cov
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} `
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+          -DBUILD_TESTING=ON `
+          -DSTATIC_LINK_RUNTIME=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j
+    
+    - name: Run C++ Tests
+      run: |
+        cd build
+        ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
+    
+    - name: Run Python Tests
+      run: |
+        cd python
+        pytest tests/ -v
+    
+    - name: Package (.msi)
+      run: |
+        cd build
+        cpack -G NSIS -C ${{ env.BUILD_TYPE }}
+        cpack -G ZIP -C ${{ env.BUILD_TYPE }}
+    
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-windows-${{ matrix.arch }}
+        path: |
+          build/*.exe
+          build/*.zip
+
+  # ============================================
+  # macOS Build
+  # ============================================
+  build-macos:
+    runs-on: macos-13
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: |
+        brew install cmake ninja sqlite python@3.11
+        pip3 install pybind11 pytest pytest-cov
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+          -DBUILD_TESTING=ON \
+          -DSTATIC_LINK_RUNTIME=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j$(sysctl -n hw.ncpu)
+    
+    - name: Run C++ Tests
+      if: matrix.arch == 'x86_64'
+      run: |
+        cd build
+        ctest --output-on-failure -C ${{ env.BUILD_TYPE }}
+    
+    - name: Run Python Tests
+      if: matrix.arch == 'x86_64'
+      run: |
+        cd python
+        pytest tests/ -v
+    
+    - name: Package (.dmg)
+      run: |
+        cd build
+        cpack -G DragNDrop
+        cpack -G TGZ
+    
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-macos-${{ matrix.arch }}
+        path: |
+          build/*.dmg
+          build/*.tar.gz
+
+  # ============================================
+  # Code Quality Checks
+  # ============================================
+  code-quality:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format-14 clang-tidy-14
+        pip3 install pylint black mypy
+    
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --error-exitcode=1 \
+          --suppress=missingIncludeSystem \
+          --inline-suppr \
+          src/
+    
+    - name: Check C++ Formatting
+      run: |
+        find src/ -name '*.cpp' -o -name '*.hpp' | xargs clang-format-14 --dry-run --Werror
+    
+    - name: Run Python Linters
+      run: |
+        black --check python/
+        pylint python/sysmon/
+        mypy python/sysmon/
+
+  # ============================================
+  # Release Deployment
+  # ============================================
+  deploy-release:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+    
+    - name: Create Checksums
+      run: |
+        cd artifacts/
+        find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" \) -exec sha256sum {} \; > SHA256SUMS
+    
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/**/*.deb
+          artifacts/**/*.rpm
+          artifacts/**/*.exe
+          artifacts/**/*.dmg
+          artifacts/**/*.zip
+          artifacts/**/*.tar.gz
+          artifacts/SHA256SUMS
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

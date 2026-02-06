@@ -1,0 +1,108 @@
+# SysMonitor Configuration
+# YAML format
+
+# Collector settings
+collector:
+  interval_seconds: 5  # How often to collect metrics
+  enabled_collectors:
+    - process
+    - cpu
+    - memory
+    - disk
+    - network
+
+# Storage settings
+storage:
+  type: sqlite  # sqlite, postgresql, timescaledb
+  path: ~/.sysmon/data.db  # For SQLite
+  retention_days: 30
+  
+  # Retention policies
+  rollup:
+    - resolution: 1s
+      retention_hours: 24
+    - resolution: 1m
+      retention_days: 30
+    - resolution: 1h
+      retention_days: 365
+
+# Alert settings
+alerts:
+  enabled: true
+  rules:
+    - name: high_cpu
+      metric: cpu_usage
+      threshold: 85
+      duration_seconds: 300
+      action: email
+      
+    - name: high_memory
+      metric: memory_usage_percent
+      threshold: 90
+      duration_seconds: 180
+      action: webhook
+      
+    - name: disk_full
+      metric: disk_usage_percent
+      threshold: 95
+      duration_seconds: 60
+      action: email
+  
+  # Notification channels
+  notifications:
+    email:
+      enabled: false
+      smtp_server: smtp.example.com
+      smtp_port: 587
+      from: alerts@example.com
+      to:
+        - admin@example.com
+    
+    webhook:
+      enabled: false
+      url: https://hooks.example.com/alerts
+      method: POST
+      headers:
+        Authorization: Bearer YOUR_TOKEN
+
+# Web API settings
+api:
+  enabled: true
+  host: 127.0.0.1  # Bind to localhost only by default
+  port: 8080
+  cors_enabled: false
+  
+  # Authentication
+  auth:
+    enabled: false
+    jwt_secret: change_this_secret
+    token_expiry_hours: 24
+
+# Daemon settings
+daemon:
+  log_level: info  # debug, info, warning, error
+  log_file: ~/.sysmon/sysmond.log
+  pid_file: ~/.sysmon/sysmond.pid
+  
+  # Resource limits
+  limits:
+    max_memory_mb: 100
+    max_cpu_percent: 5
+
+# Distributed mode settings (optional)
+distributed:
+  enabled: false
+  mode: agent  # agent or server
+  
+  # Agent configuration (reports to central server)
+  agent:
+    server_url: https://central.example.com:8443
+    api_key: YOUR_API_KEY
+    report_interval_seconds: 60
+  
+  # Server configuration (aggregates from agents)
+  server:
+    listen_address: 0.0.0.0:8443
+    tls_cert: /path/to/cert.pem
+    tls_key: /path/to/key.pem
+    max_agents: 1000
