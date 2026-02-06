@@ -5,6 +5,8 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 #include <cstring>
+#include <ctime>
+#include <algorithm>
 #include <vector>
 
 namespace sysmon {

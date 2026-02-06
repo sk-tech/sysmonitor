@@ -1,6 +1,7 @@
 #include "sysmon/platform_interface.hpp"
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
 
 void print_system_info() {
     auto system_metrics = sysmon::CreateSystemMetrics();

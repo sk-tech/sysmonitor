@@ -1,6 +1,7 @@
 #include "sysmon/platform_interface.hpp"
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <chrono>
 #include <functional>
 

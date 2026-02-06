@@ -99,9 +99,9 @@ include_directories(
 # Core library subdirectories
 add_subdirectory(src/core)
 add_subdirectory(src/platform)
-add_subdirectory(src/collectors)
-add_subdirectory(src/storage)
-add_subdirectory(src/utils)
+# add_subdirectory(src/collectors)  # Week 2
+# add_subdirectory(src/storage)     # Week 2
+# add_subdirectory(src/utils)       # Week 2
 
 # Python bindings
 if(BUILD_PYTHON_BINDINGS)
