@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SysMonitor Multi-Host Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+            background: #0f0f23; 
+            color: #fff; 
+        }
+        .header { 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            padding: 20px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+            border-bottom: 2px solid #00d4ff;
+        }
+        h1 { 
+            color: #00d4ff; 
+            font-size: 28px; 
+            text-shadow: 0 0 10px rgba(0,212,255,0.5);
+        }
+        .status { 
+            font-size: 12px; 
+            color: #888; 
+            margin-top: 5px; 
+        }
+        .live-indicator { 
+            display: inline-block; 
+            width: 8px; 
+            height: 8px; 
+            background: #4caf50; 
+            border-radius: 50%; 
+            margin-right: 8px; 
+            animation: pulse 2s infinite; 
+        }
+        @keyframes pulse { 
+            0%, 100% { opacity: 1; transform: scale(1); } 
+            50% { opacity: 0.5; transform: scale(1.2); } 
+        }
+        .container { 
+            max-width: 1600px; 
+            margin: 20px auto; 
+            padding: 0 20px; 
+        }
+        
+        /* Fleet Overview Section */
+        .fleet-overview { 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            padding: 24px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            border: 1px solid #2a2a3e; 
+            margin-bottom: 20px;
+        }
+        .fleet-title { 
+            color: #00d4ff; 
+            font-size: 20px; 
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        .fleet-stats { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+        }
+        .fleet-stat { 
+            background: rgba(0,212,255,0.05); 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(0,212,255,0.2);
+        }
+        .fleet-stat-label { 
+            font-size: 12px; 
+            color: #888; 
+            text-transform: uppercase; 
+            letter-spacing: 1px;
+        }
+        .fleet-stat-value { 
+            font-size: 32px; 
+            font-weight: bold; 
+            color: #00d4ff; 
+            margin-top: 5px;
+        }
+        .fleet-stat-value.online { color: #4caf50; }
+        .fleet-stat-value.offline { color: #f44336; }
+        
+        /* Host Selector */
+        .host-selector { 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            border: 1px solid #2a2a3e; 
+            margin-bottom: 20px;
+        }
+        .host-selector label { 
+            color: #00d4ff; 
+            font-size: 14px; 
+            margin-right: 10px;
+            font-weight: 600;
+        }
+        .host-selector select { 
+            background: #0f0f23; 
+            color: #fff; 
+            border: 1px solid #2a2a3e; 
+            padding: 10px 15px; 
+            border-radius: 6px; 
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 200px;
+            transition: border-color 0.2s;
+        }
+        .host-selector select:hover {
+            border-color: #00d4ff;
+        }
+        .host-selector select:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 8px rgba(0,212,255,0.3);
+        }
+        .view-mode { 
+            display: inline-block; 
+            margin-left: 20px;
+        }
+        .view-mode button {
+            background: #0f0f23;
+            color: #888;
+            border: 1px solid #2a2a3e;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 5px;
+            transition: all 0.2s;
+        }
+        .view-mode button:hover {
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+        .view-mode button.active {
+            background: #00d4ff;
+            color: #0f0f23;
+            border-color: #00d4ff;
+            font-weight: 600;
+        }
+        
+        /* Metrics Grid */
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            gap: 20px; 
+            margin-bottom: 20px; 
+        }
+        .metric-card { 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            padding: 24px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            border: 1px solid #2a2a3e; 
+            transition: transform 0.2s; 
+        }
+        .metric-card:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(0,212,255,0.2); 
+        }
+        .metric-value { 
+            font-size: 48px; 
+            font-weight: bold; 
+            color: #00d4ff; 
+            text-shadow: 0 0 10px rgba(0,212,255,0.5); 
+            margin: 10px 0; 
+        }
+        .metric-label { 
+            font-size: 14px; 
+            color: #888; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+        }
+        .metric-change { 
+            font-size: 12px; 
+            color: #4caf50; 
+            margin-top: 5px; 
+        }
+        .metric-change.negative { 
+            color: #f44336; 
+        }
+        .timestamp { 
+            font-size: 11px; 
+            color: #666; 
+            margin-top: 8px; 
+        }
+        
+        /* Chart Container */
+        .chart-container { 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            border: 1px solid #2a2a3e; 
+            margin-bottom: 20px; 
+        }
+        .chart-title { 
+            color: #00d4ff; 
+            font-size: 18px; 
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        canvas { 
+            max-width: 100%; 
+        }
+        
+        /* Comparison View */
+        .comparison-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .host-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            border: 1px solid #2a2a3e;
+        }
+        .host-card-title {
+            color: #00d4ff;
+            font-size: 18px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            border-bottom: 1px solid #2a2a3e;
+            padding-bottom: 10px;
+        }
+        .host-card .grid {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+        .host-card .metric-card {
+            padding: 15px;
+        }
+        .host-card .metric-value {
+            font-size: 28px;
+        }
+        
+        .error { 
+            color: #f44336; 
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .host-selector { flex-direction: column; }
+            .view-mode { margin-left: 0; margin-top: 10px; }
+            .comparison-container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌐 SysMonitor Multi-Host Dashboard</h1>
+        <div class="status" id="status"><span class="live-indicator"></span>Distributed monitoring active</div>
+    </div>
+    
+    <div class="container">
+        <!-- Fleet Overview -->
+        <div class="fleet-overview">
+            <div class="fleet-title">Fleet Overview</div>
+            <div class="fleet-stats" id="fleet-stats">
+                <div class="fleet-stat">
+                    <div class="fleet-stat-label">Total Hosts</div>
+                    <div class="fleet-stat-value" id="total-hosts">-</div>
+                </div>
+                <div class="fleet-stat">
+                    <div class="fleet-stat-label">Online</div>
+                    <div class="fleet-stat-value online" id="online-hosts">-</div>
+                </div>
+                <div class="fleet-stat">
+                    <div class="fleet-stat-label">Offline</div>
+                    <div class="fleet-stat-value offline" id="offline-hosts">-</div>
+                </div>
+                <div class="fleet-stat">
+                    <div class="fleet-stat-label">Avg CPU Usage</div>
+                    <div class="fleet-stat-value" id="avg-cpu">-</div>
+                </div>
+                <div class="fleet-stat">
+                    <div class="fleet-stat-label">Total Memory Used</div>
+                    <div class="fleet-stat-value" id="total-memory">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Host Selector -->
+        <div class="host-selector">
+            <label for="host-select">Select Host:</label>
+            <select id="host-select">
+                <option value="">Loading hosts...</option>
+            </select>
+            <div class="view-mode">
+                <button class="active" onclick="switchView('single')">Single Host</button>
+                <button onclick="switchView('comparison')">Compare Hosts</button>
+            </div>
+        </div>
+        
+        <!-- Single Host View -->
+        <div id="single-view">
+            <div class="grid" id="metrics"></div>
+            <div class="chart-container">
+                <div class="chart-title">CPU & Memory Trends (Last 5 Minutes)</div>
+                <canvas id="metricsChart" width="800" height="300"></canvas>
+            </div>
+        </div>
+        
+        <!-- Comparison View -->
+        <div id="comparison-view" style="display: none;">
+            <div class="comparison-container" id="comparison-container">
+                <!-- Dynamically filled -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Configuration
+        const API_BASE = 'http://localhost:9000';
+        const REFRESH_INTERVAL = 5000; // 5 seconds
+        
+        // State
+        let currentView = 'single';
+        let selectedHost = null;
+        let allHosts = [];
+        let previousValues = {};
+        let chartData = {
+            cpu: [],
+            memory: [],
+            timestamps: []
+        };
+        
+        // Metrics to display
+        const metrics = [
+            {type: 'cpu.total_usage', label: 'CPU Usage', unit: '%'},
+            {type: 'memory.usage_percent', label: 'Memory Usage', unit: '%'},
+            {type: 'cpu.load_avg_1m', label: 'Load Average (1m)', unit: ''},
+            {type: 'memory.used_bytes', label: 'Memory Used', unit: 'bytes', autoScale: true}
+        ];
+        
+        // Utility: Format bytes
+        function formatBytes(bytes) {
+            if (bytes < 1024) return {value: bytes.toFixed(0), unit: 'B'};
+            if (bytes < 1024 * 1024) return {value: (bytes / 1024).toFixed(2), unit: 'KB'};
+            if (bytes < 1024 * 1024 * 1024) return {value: (bytes / (1024 * 1024)).toFixed(2), unit: 'MB'};
+            return {value: (bytes / (1024 * 1024 * 1024)).toFixed(2), unit: 'GB'};
+        }
+        
+        // Utility: Format timestamp
+        function formatTimestamp(ts) {
+            const date = new Date(ts * 1000);
+            return date.toLocaleTimeString();
+        }
+        
+        // API: Fetch hosts
+        async function fetchHosts() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/hosts`);
+                const data = await resp.json();
+                allHosts = data.hosts || [];
+                return allHosts;
+            } catch (e) {
+                console.error('Error fetching hosts:', e);
+                return [];
+            }
+        }
+        
+        // API: Fetch fleet summary
+        async function fetchFleetSummary() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/fleet/summary`);
+                const data = await resp.json();
+                return data;
+            } catch (e) {
+                console.error('Error fetching fleet summary:', e);
+                return null;
+            }
+        }
+        
+        // API: Fetch latest metrics for a host
+        async function fetchHostMetrics(hostname) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/latest?host=${hostname}`);
+                const data = await resp.json();
+                return data.metrics || [];
+            } catch (e) {
+                console.error('Error fetching metrics for', hostname, ':', e);
+                return [];
+            }
+        }
+        
+        // API: Fetch metric history
+        async function fetchMetricHistory(hostname, metricType, limit = 30) {
+            try {
+                const endTime = Math.floor(Date.now() / 1000);
+                const startTime = endTime - 300; // Last 5 minutes
+                const resp = await fetch(`${API_BASE}/api/metrics?host=${hostname}&metric_type=${metricType}&start=${startTime}&end=${endTime}&limit=${limit}`);
+                const data = await resp.json();
+                return data.metrics || [];
+            } catch (e) {
+                console.error('Error fetching history:', e);
+                return [];
+            }
+        }
+        
+        // UI: Update fleet overview
+        async function updateFleetOverview() {
+            const summary = await fetchFleetSummary();
+            if (!summary) return;
+            
+            document.getElementById('total-hosts').textContent = summary.total_hosts || 0;
+            document.getElementById('online-hosts').textContent = summary.online_hosts || 0;
+            document.getElementById('offline-hosts').textContent = summary.offline_hosts || 0;
+            
+            const avgCpu = summary.avg_cpu_usage || 0;
+            document.getElementById('avg-cpu').textContent = avgCpu.toFixed(1) + '%';
+            
+            const totalMem = summary.total_memory_used || 0;
+            const formatted = formatBytes(totalMem);
+            document.getElementById('total-memory').textContent = formatted.value + formatted.unit;
+        }
+        
+        // UI: Update host selector dropdown
+        async function updateHostSelector() {
+            const hosts = await fetchHosts();
+            const select = document.getElementById('host-select');
+            
+            if (hosts.length === 0) {
+                select.innerHTML = '<option value="">No hosts available</option>';
+                return;
+            }
+            
+            // Build options
+            const options = hosts.map(host => {
+                const status = host.status === 'active' ? '🟢' : '🔴';
+                return `<option value="${host.hostname}">${status} ${host.hostname} (${host.platform || 'Unknown'})</option>`;
+            }).join('');
+            
+            select.innerHTML = options;
+            
+            // Select first host if none selected
+            if (!selectedHost && hosts.length > 0) {
+                selectedHost = hosts[0].hostname;
+                select.value = selectedHost;
+            }
+        }
+        
+        // UI: Update single host metrics
+        async function updateSingleHostView() {
+            if (!selectedHost) {
+                document.getElementById('metrics').innerHTML = '<div class="no-data">Select a host to view metrics</div>';
+                return;
+            }
+            
+            const allMetrics = await fetchHostMetrics(selectedHost);
+            const metricsMap = {};
+            allMetrics.forEach(m => {
+                metricsMap[m.metric_type] = m;
+            });
+            
+            const html = await Promise.all(metrics.map(async (metric) => {
+                const data = metricsMap[metric.type];
+                
+                if (!data) {
+                    return `
+                        <div class="metric-card">
+                            <div class="metric-label">${metric.label}</div>
+                            <div class="error">No data</div>
+                        </div>
+                    `;
+                }
+                
+                let value = data.value || 0;
+                let displayValue = value;
+                let displayUnit = metric.unit;
+                
+                if (metric.autoScale && typeof value === 'number') {
+                    const formatted = formatBytes(value);
+                    displayValue = formatted.value;
+                    displayUnit = formatted.unit;
+                } else if (typeof value === 'number') {
+                    displayValue = value.toFixed(2);
+                }
+                
+                // Calculate change
+                const prevKey = `${selectedHost}.${metric.type}`;
+                const prev = previousValues[prevKey];
+                let changeHtml = '';
+                if (prev !== undefined && typeof value === 'number') {
+                    const change = value - prev;
+                    const changeClass = change >= 0 ? '' : 'negative';
+                    const changeSymbol = change >= 0 ? '▲' : '▼';
+                    
+                    let changeDisplay = Math.abs(change);
+                    let changeUnit = displayUnit;
+                    if (metric.autoScale) {
+                        const formatted = formatBytes(Math.abs(change));
+                        changeDisplay = formatted.value;
+                        changeUnit = formatted.unit;
+                    } else {
+                        changeDisplay = changeDisplay.toFixed(2);
+                    }
+                    
+                    changeHtml = `<div class="metric-change ${changeClass}">${changeSymbol} ${changeDisplay}${changeUnit}</div>`;
+                }
+                previousValues[prevKey] = value;
+                
+                return `
+                    <div class="metric-card">
+                        <div class="metric-label">${metric.label}</div>
+                        <div class="metric-value">${displayValue}${displayUnit}</div>
+                        ${changeHtml}
+                        <div class="timestamp">${formatTimestamp(data.timestamp)}</div>
+                    </div>
+                `;
+            }));
+            
+            document.getElementById('metrics').innerHTML = html.join('');
+            
+            // Update chart
+            await updateChart();
+        }
+        
+        // UI: Update chart
+        async function updateChart() {
+            if (!selectedHost) return;
+            
+            const cpuHistory = await fetchMetricHistory(selectedHost, 'cpu.total_usage');
+            const memHistory = await fetchMetricHistory(selectedHost, 'memory.usage_percent');
+            
+            chartData.cpu = cpuHistory.map(m => m.value).reverse();
+            chartData.memory = memHistory.map(m => m.value).reverse();
+            chartData.timestamps = cpuHistory.map(m => formatTimestamp(m.timestamp)).reverse();
+            
+            drawChart();
+        }
+        
+        // UI: Draw chart
+        function drawChart() {
+            const canvas = document.getElementById('metricsChart');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            if (chartData.cpu.length === 0) {
+                ctx.fillStyle = '#666';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No data available', width / 2, height / 2);
+                return;
+            }
+            
+            const maxPoints = Math.min(30, chartData.cpu.length);
+            const cpu = chartData.cpu.slice(-maxPoints);
+            const memory = chartData.memory.slice(-maxPoints);
+            
+            // Draw grid
+            ctx.strokeStyle = '#2a2a3e';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = (height - 40) * (i / 4) + 20;
+                ctx.beginPath();
+                ctx.moveTo(40, y);
+                ctx.lineTo(width - 20, y);
+                ctx.stroke();
+                
+                ctx.fillStyle = '#666';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${100 - (i * 25)}%`, 35, y + 3);
+            }
+            
+            // Draw CPU line
+            if (cpu.length > 1) {
+                ctx.strokeStyle = '#00d4ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                cpu.forEach((val, i) => {
+                    const x = 40 + ((width - 60) * i / (maxPoints - 1));
+                    const y = 20 + ((height - 40) * (1 - val / 100));
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            }
+            
+            // Draw Memory line
+            if (memory.length > 1) {
+                ctx.strokeStyle = '#4caf50';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                memory.forEach((val, i) => {
+                    const x = 40 + ((width - 60) * i / (maxPoints - 1));
+                    const y = 20 + ((height - 40) * (1 - val / 100));
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            }
+            
+            // Legend
+            ctx.fillStyle = '#00d4ff';
+            ctx.fillRect(width - 180, 10, 15, 3);
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('CPU', width - 160, 15);
+            
+            ctx.fillStyle = '#4caf50';
+            ctx.fillRect(width - 100, 10, 15, 3);
+            ctx.fillText('Memory', width - 80, 15);
+        }
+        
+        // UI: Update comparison view
+        async function updateComparisonView() {
+            const hosts = allHosts.slice(0, 3); // Show max 3 hosts
+            
+            if (hosts.length === 0) {
+                document.getElementById('comparison-container').innerHTML = '<div class="no-data">No hosts available for comparison</div>';
+                return;
+            }
+            
+            const hostCards = await Promise.all(hosts.map(async (host) => {
+                const allMetrics = await fetchHostMetrics(host.hostname);
+                const metricsMap = {};
+                allMetrics.forEach(m => {
+                    metricsMap[m.metric_type] = m;
+                });
+                
+                const metricCards = metrics.map(metric => {
+                    const data = metricsMap[metric.type];
+                    
+                    if (!data) {
+                        return `
+                            <div class="metric-card">
+                                <div class="metric-label">${metric.label}</div>
+                                <div class="error">No data</div>
+                            </div>
+                        `;
+                    }
+                    
+                    let value = data.value || 0;
+                    let displayValue = value;
+                    let displayUnit = metric.unit;
+                    
+                    if (metric.autoScale && typeof value === 'number') {
+                        const formatted = formatBytes(value);
+                        displayValue = formatted.value;
+                        displayUnit = formatted.unit;
+                    } else if (typeof value === 'number') {
+                        displayValue = value.toFixed(2);
+                    }
+                    
+                    return `
+                        <div class="metric-card">
+                            <div class="metric-label">${metric.label}</div>
+                            <div class="metric-value">${displayValue}${displayUnit}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                const status = host.status === 'active' ? '🟢' : '🔴';
+                return `
+                    <div class="host-card">
+                        <div class="host-card-title">${status} ${host.hostname}</div>
+                        <div class="grid">${metricCards}</div>
+                    </div>
+                `;
+            }));
+            
+            document.getElementById('comparison-container').innerHTML = hostCards.join('');
+        }
+        
+        // UI: Switch view
+        function switchView(view) {
+            currentView = view;
+            
+            // Update button states
+            document.querySelectorAll('.view-mode button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Toggle views
+            if (view === 'single') {
+                document.getElementById('single-view').style.display = 'block';
+                document.getElementById('comparison-view').style.display = 'none';
+            } else {
+                document.getElementById('single-view').style.display = 'none';
+                document.getElementById('comparison-view').style.display = 'block';
+            }
+        }
+        
+        // Event: Host selection change
+        document.getElementById('host-select').addEventListener('change', (e) => {
+            selectedHost = e.target.value;
+            previousValues = {}; // Reset change tracking
+            chartData = { cpu: [], memory: [], timestamps: [] }; // Reset chart
+        });
+        
+        // Main update loop
+        async function update() {
+            await updateFleetOverview();
+            await updateHostSelector();
+            
+            if (currentView === 'single') {
+                await updateSingleHostView();
+            } else {
+                await updateComparisonView();
+            }
+        }
+        
+        // Initialize
+        update();
+        setInterval(update, REFRESH_INTERVAL);
+    </script>
+</body>
+</html>

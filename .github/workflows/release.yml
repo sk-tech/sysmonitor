@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ==========================================
+  # Create GitHub Release
+  # ==========================================
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Extract Version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: SysMonitor ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## SysMonitor Release ${{ steps.get_version.outputs.VERSION }}
+          
+          ### Features
+          - Cross-platform system monitoring (Linux, macOS, Windows)
+          - Real-time metric collection and storage
+          - Distributed monitoring with aggregation
+          - Threshold-based alerting
+          - ML-powered anomaly detection
+          - Web dashboard and REST API
+          
+          ### Downloads
+          Download the appropriate binary for your platform below.
+          
+          ### Installation
+          ```bash
+          # Linux/macOS
+          tar -xzf sysmonitor-<platform>-x86_64.tar.gz
+          sudo mv sysmond sysmon /usr/local/bin/
+          
+          # Windows
+          # Extract ZIP and add to PATH
+          ```
+          
+          ### Documentation
+          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for usage instructions.
+        draft: false
+        prerelease: false
+
+  # ==========================================
+  # Build Release Binaries
+  # ==========================================
+  build-linux-release:
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libsqlite3-dev
+    
+    - name: Build
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DSTATIC_LINK_RUNTIME=ON
+        cmake --build build -j$(nproc)
+    
+    - name: Create Archive
+      run: |
+        cd build/bin
+        tar -czf ../../sysmonitor-linux-x86_64.tar.gz sysmond sysmon
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./sysmonitor-linux-x86_64.tar.gz
+        asset_name: sysmonitor-linux-x86_64.tar.gz
+        asset_content_type: application/gzip
+
+  build-macos-release:
+    needs: create-release
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: brew install cmake sqlite3
+    
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        cmake --build build -j$(sysctl -n hw.ncpu)
+    
+    - name: Create Archive
+      run: |
+        cd build/bin
+        tar -czf ../../sysmonitor-macos-x86_64.tar.gz sysmond sysmon
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./sysmonitor-macos-x86_64.tar.gz
+        asset_name: sysmonitor-macos-x86_64.tar.gz
+        asset_content_type: application/gzip
+
+  build-windows-release:
+    needs: create-release
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.1
+    
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        cmake --build build --config ${{env.BUILD_TYPE}} -j $env:NUMBER_OF_PROCESSORS
+    
+    - name: Create Archive
+      run: |
+        cd build/bin/${{env.BUILD_TYPE}}
+        7z a ../../../sysmonitor-windows-x86_64.zip sysmond.exe sysmon.exe
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./sysmonitor-windows-x86_64.zip
+        asset_name: sysmonitor-windows-x86_64.zip
+        asset_content_type: application/zip

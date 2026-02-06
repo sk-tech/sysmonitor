@@ -1,11 +1,10 @@
-pybind11==2.11.1
-fastapi==0.100.0
-uvicorn[standard]==0.23.0
-sqlalchemy==2.0.19
-pandas==2.0.3
-pyyaml==6.0.1
-pytest==7.4.0
-pytest-cov==4.1.0
-black==23.7.0
-pylint==2.17.5
-mypy==1.4.1
+# SysMonitor Python dependencies
+# Zero external dependencies for core API server (stdlib only)
+# Optional dependencies for enhanced features:
+
+# Service discovery (Week 6)
+zeroconf>=0.70.0
+
+# Development/testing
+pytest>=7.0.0
+pytest-cov>=4.0.0

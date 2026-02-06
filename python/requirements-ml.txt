@@ -1,0 +1,19 @@
+# Machine Learning dependencies for SysMonitor Week 7
+# Statistical and ML-based anomaly detection
+
+# Core scientific computing
+numpy>=1.21.0
+scipy>=1.7.0
+
+# Machine learning
+scikit-learn>=1.0.0
+
+# Time series forecasting (optional but recommended)
+prophet>=1.1.0
+
+# Visualization support
+matplotlib>=3.5.0
+
+# Development/testing
+pytest>=7.0.0
+pytest-cov>=4.0.0

@@ -1,0 +1,60 @@
+# SysMonitor Agent Dockerfile
+# Multi-stage build for minimal image size
+
+# Stage 1: Build
+FROM ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy source code
+WORKDIR /build
+COPY . .
+
+# Build
+RUN cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_PYTHON_BINDINGS=OFF \
+    -DSTATIC_LINK_RUNTIME=ON \
+    && cmake --build build --target sysmond -j$(nproc)
+
+# Stage 2: Runtime
+FROM ubuntu:22.04
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libsqlite3-0 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --no-create-home --shell /usr/sbin/nologin sysmon
+
+# Copy binary from builder
+COPY --from=builder /build/build/bin/sysmond /usr/local/bin/sysmond
+RUN chmod +x /usr/local/bin/sysmond
+
+# Create directories
+RUN mkdir -p /var/lib/sysmon /etc/sysmon \
+    && chown -R sysmon:sysmon /var/lib/sysmon
+
+# Default configuration
+COPY config/agent.yaml.example /etc/sysmon/config.yaml
+
+# Switch to non-root user
+USER sysmon
+
+# Expose volumes
+VOLUME ["/var/lib/sysmon"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD [ "sh", "-c", "test -f /var/lib/sysmon/metrics.db && test -r /var/lib/sysmon/metrics.db" ]
+
+# Run daemon
+ENTRYPOINT ["/usr/local/bin/sysmond"]
+CMD ["--config", "/etc/sysmon/config.yaml"]

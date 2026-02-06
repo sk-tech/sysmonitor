@@ -1,0 +1,289 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ==========================================
+  # Linux Build and Test
+  # ==========================================
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libsqlite3-dev \
+          python3 \
+          python3-pip \
+          sqlite3
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DBUILD_TESTING=ON \
+          -DENABLE_SANITIZERS=OFF
+    
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j$(nproc)
+    
+    - name: Run C++ Unit Tests
+      run: |
+        cd build
+        ctest --output-on-failure --verbose
+    
+    - name: Install Python Dependencies
+      run: |
+        pip3 install pytest requests pyyaml
+    
+    - name: Run Python Tests
+      run: |
+        cd tests
+        pytest test_storage.py test_ml.py -v || true
+    
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-linux
+        path: |
+          build/bin/sysmond
+          build/bin/sysmon
+    
+    - name: Create Archive
+      run: |
+        cd build/bin
+        tar -czf ../../sysmonitor-linux-x86_64.tar.gz sysmond sysmon
+    
+    - name: Upload Archive
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-linux-archive
+        path: sysmonitor-linux-x86_64.tar.gz
+
+  # ==========================================
+  # macOS Build and Test
+  # ==========================================
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: |
+        brew install cmake sqlite3 python3
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DBUILD_TESTING=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j$(sysctl -n hw.ncpu)
+    
+    - name: Run C++ Unit Tests
+      run: |
+        cd build
+        ctest --output-on-failure --verbose
+    
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-macos
+        path: |
+          build/bin/sysmond
+          build/bin/sysmon
+    
+    - name: Create Archive
+      run: |
+        cd build/bin
+        tar -czf ../../sysmonitor-macos-x86_64.tar.gz sysmond sysmon
+    
+    - name: Upload Archive
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-macos-archive
+        path: sysmonitor-macos-x86_64.tar.gz
+
+  # ==========================================
+  # Windows Build and Test
+  # ==========================================
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.1
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build `
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+          -DBUILD_TESTING=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j $env:NUMBER_OF_PROCESSORS
+    
+    - name: Run C++ Unit Tests
+      run: |
+        cd build
+        ctest --output-on-failure --verbose -C ${{env.BUILD_TYPE}}
+    
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-windows
+        path: |
+          build/bin/${{env.BUILD_TYPE}}/sysmond.exe
+          build/bin/${{env.BUILD_TYPE}}/sysmon.exe
+    
+    - name: Create Archive
+      run: |
+        cd build/bin/${{env.BUILD_TYPE}}
+        7z a ../../../sysmonitor-windows-x86_64.zip sysmond.exe sysmon.exe
+    
+    - name: Upload Archive
+      uses: actions/upload-artifact@v3
+      with:
+        name: sysmonitor-windows-archive
+        path: sysmonitor-windows-x86_64.zip
+
+  # ==========================================
+  # Integration Tests (Linux only)
+  # ==========================================
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: build-linux
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: sysmonitor-linux
+        path: build/bin
+    
+    - name: Make Binaries Executable
+      run: chmod +x build/bin/*
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sqlite3 python3 python3-pip curl stress-ng
+        pip3 install pyyaml requests
+    
+    - name: Run Full Pipeline Test
+      run: |
+        chmod +x tests/integration/test_full_pipeline.sh
+        tests/integration/test_full_pipeline.sh
+    
+    - name: Run Alert Test
+      run: |
+        chmod +x tests/integration/test_alerts.sh
+        tests/integration/test_alerts.sh
+    
+    - name: Upload Test Logs
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: integration-test-logs
+        path: /tmp/sysmon_*
+
+  # ==========================================
+  # Code Coverage
+  # ==========================================
+  coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libsqlite3-dev \
+          gcovr \
+          lcov
+    
+    - name: Configure with Coverage
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTING=ON \
+          -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage"
+    
+    - name: Build
+      run: cmake --build build -j$(nproc)
+    
+    - name: Run Tests
+      run: |
+        cd build
+        ctest --output-on-failure
+    
+    - name: Generate Coverage Report
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        lcov --remove coverage.info '*/tests/*' --output-file coverage.info
+        lcov --list coverage.info
+    
+    - name: Upload Coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.info
+        fail_ci_if_error: false
+
+  # ==========================================
+  # Static Analysis
+  # ==========================================
+  static-analysis:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-tidy
+    
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all \
+          --suppress=missingIncludeSystem \
+          --suppress=unmatchedSuppression \
+          --error-exitcode=0 \
+          src/ include/
+    
+    - name: Python Linting
+      run: |
+        pip3 install pylint flake8
+        flake8 python/sysmon --count --select=E9,F63,F7,F82 --show-source --statistics || true

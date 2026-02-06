@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # Aggregator - Central metrics collection
+  # ===========================================
+  aggregator:
+    build:
+      context: .
+      dockerfile: Dockerfile.aggregator
+    image: sysmonitor-aggregator:latest
+    container_name: sysmon-aggregator
+    ports:
+      - "9000:9000"
+    volumes:
+      - aggregator-data:/var/lib/sysmon
+      - ./config/sysmon.yaml.example:/etc/sysmon/config.yaml:ro
+    environment:
+      - SYSMON_PORT=9000
+      - SYSMON_LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - sysmon-net
+
+  # ===========================================
+  # Agent - Metrics collector
+  # ===========================================
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    image: sysmonitor-agent:latest
+    container_name: sysmon-agent
+    hostname: ${HOSTNAME:-docker-host}
+    volumes:
+      - agent-data:/var/lib/sysmon
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - ./config/agent.yaml.example:/etc/sysmon/config.yaml:ro
+    environment:
+      - SYSMON_AGGREGATOR_URL=http://aggregator:9000
+      - SYSMON_HOSTNAME=${HOSTNAME:-docker-host}
+    depends_on:
+      aggregator:
+        condition: service_healthy
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - sysmon-net
+
+  # ===========================================
+  # Dashboard - Web UI (optional)
+  # ===========================================
+  dashboard:
+    image: nginx:alpine
+    container_name: sysmon-dashboard
+    ports:
+      - "8080:80"
+    volumes:
+      - ./python/sysmon/aggregator/static:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - aggregator
+    restart: unless-stopped
+    networks:
+      - sysmon-net
+
+# ===========================================
+# Volumes
+# ===========================================
+volumes:
+  aggregator-data:
+    driver: local
+  agent-data:
+    driver: local
+
+# ===========================================
+# Networks
+# ===========================================
+networks:
+  sysmon-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

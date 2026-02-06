@@ -5,6 +5,9 @@ add_library(sysmon_core STATIC
     platform_factory.cpp
     alert_config.cpp
     alert_manager.cpp
+    agent_config.cpp
+    network_publisher.cpp
+    service_discovery.cpp
 )
 
 target_include_directories(sysmon_core PUBLIC

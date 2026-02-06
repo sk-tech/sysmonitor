@@ -21,6 +21,23 @@ HAS_STORAGE = os.path.exists(DB_PATH)
 streaming_clients = []
 streaming_lock = threading.Lock()
 
+# ML module (lazy loading)
+ML_AVAILABLE = False
+anomaly_detector = None
+
+try:
+    from sysmon.ml import AnomalyDetector
+    ML_AVAILABLE = True
+except ImportError:
+    print("Warning: ML module not available. Install with: pip install -r requirements-ml.txt")
+
+def get_anomaly_detector():
+    """Lazy initialization of anomaly detector"""
+    global anomaly_detector
+    if anomaly_detector is None and ML_AVAILABLE:
+        anomaly_detector = AnomalyDetector(db_path=DB_PATH)
+    return anomaly_detector
+
 def query_db_latest(metric_type):
     """Query latest metric directly from SQLite"""
     if not HAS_STORAGE:
@@ -104,7 +121,7 @@ class SysMonitorHandler(BaseHTTPRequestHandler):
         if path == '/':
             self.send_dashboard()
         elif path == '/api/health':
-            self.send_json({'status': 'ok', 'storage': HAS_STORAGE})
+            self.send_json({'status': 'ok', 'storage': HAS_STORAGE, 'ml_available': ML_AVAILABLE})
         elif path == '/api/metrics/latest':
             self.handle_latest(query)
         elif path == '/api/metrics/history':
@@ -113,8 +130,42 @@ class SysMonitorHandler(BaseHTTPRequestHandler):
             self.handle_metric_types()
         elif path == '/api/stream':
             self.handle_stream()
+        elif path == '/api/ml/detect':
+            self.handle_ml_detect(query)
+        elif path == '/api/ml/baseline':
+            self.handle_ml_baseline(query)
+        elif path == '/api/ml/predict':
+            self.handle_ml_predict(query)
         else:
             self.send_error(404, "Not found")
+    
+    def do_POST(self):
+        """Handle POST requests"""
+        parsed = urlparse(self.path)
+        path = parsed.path
+        
+        # Read request body
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else '{}'
+        
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({'error': 'Invalid JSON'}, 400)
+            return
+        
+        if path == '/api/ml/train':
+            self.handle_ml_train(data)
+        else:
+            self.send_error(404, "Not found")
+    
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
     def send_json(self, data, status=200):
         self.send_response(status)
@@ -225,6 +276,199 @@ class SysMonitorHandler(BaseHTTPRequestHandler):
                 time.sleep(2)  # Poll every 2 seconds
         except (BrokenPipeError, ConnectionResetError):
             pass  # Client disconnected
+    
+    def handle_ml_train(self, data):
+        """POST /api/ml/train - Train ML models"""
+        if not ML_AVAILABLE:
+            self.send_json({'error': 'ML module not available'}, 501)
+            return
+        
+        if not HAS_STORAGE:
+            self.send_json({'error': 'Storage not available'}, 500)
+            return
+        
+        detector = get_anomaly_detector()
+        if detector is None:
+            self.send_json({'error': 'Failed to initialize anomaly detector'}, 500)
+            return
+        
+        try:
+            metric_type = data.get('metric', None)
+            host = data.get('host', 'localhost')
+            hours = data.get('hours', 24)
+            
+            if metric_type:
+                # Train specific metric
+                success = detector.train_metric(metric_type, host, hours)
+                self.send_json({
+                    'status': 'success' if success else 'failed',
+                    'metric': metric_type,
+                    'host': host,
+                    'hours': hours
+                })
+            else:
+                # Train all metrics
+                results = detector.train_all_metrics(hours)
+                self.send_json({
+                    'status': 'success',
+                    'trained': sum(1 for v in results.values() if v),
+                    'failed': sum(1 for v in results.values() if not v),
+                    'details': results
+                })
+        except Exception as e:
+            self.send_json({'error': str(e)}, 500)
+    
+    def handle_ml_detect(self, query):
+        """GET /api/ml/detect - Run anomaly detection"""
+        if not ML_AVAILABLE:
+            self.send_json({'error': 'ML module not available'}, 501)
+            return
+        
+        if not HAS_STORAGE:
+            self.send_json({'error': 'Storage not available'}, 500)
+            return
+        
+        metric = query.get('metric', [''])[0]
+        if not metric:
+            self.send_json({'error': 'metric parameter required'}, 400)
+            return
+        
+        host = query.get('host', ['localhost'])[0]
+        
+        detector = get_anomaly_detector()
+        if detector is None:
+            self.send_json({'error': 'Failed to initialize anomaly detector'}, 500)
+            return
+        
+        try:
+            # Get latest value
+            latest = query_db_latest(metric)
+            if not latest:
+                self.send_json({'error': 'No data found for metric'}, 404)
+                return
+            
+            # Run detection
+            results = detector.detect(
+                metric,
+                latest['value'],
+                latest['timestamp'],
+                host
+            )
+            
+            # Get consensus
+            is_anomaly, confidence = detector.get_consensus(results)
+            
+            # Format results
+            response = {
+                'metric': metric,
+                'host': host,
+                'timestamp': latest['timestamp'],
+                'value': latest['value'],
+                'is_anomaly': is_anomaly,
+                'confidence': confidence,
+                'methods': {}
+            }
+            
+            for method, result in results.items():
+                response['methods'][method] = {
+                    'is_anomaly': result.is_anomaly,
+                    'score': result.score,
+                    'threshold': result.threshold,
+                    'expected_value': result.expected_value
+                }
+            
+            self.send_json(response)
+        except Exception as e:
+            self.send_json({'error': str(e)}, 500)
+    
+    def handle_ml_baseline(self, query):
+        """GET /api/ml/baseline - Get learned baseline"""
+        if not ML_AVAILABLE:
+            self.send_json({'error': 'ML module not available'}, 501)
+            return
+        
+        if not HAS_STORAGE:
+            self.send_json({'error': 'Storage not available'}, 500)
+            return
+        
+        metric = query.get('metric', [''])[0]
+        if not metric:
+            self.send_json({'error': 'metric parameter required'}, 400)
+            return
+        
+        host = query.get('host', ['localhost'])[0]
+        
+        detector = get_anomaly_detector()
+        if detector is None:
+            self.send_json({'error': 'Failed to initialize anomaly detector'}, 500)
+            return
+        
+        try:
+            baseline = detector.get_baseline(metric, host)
+            if baseline:
+                lower, upper = baseline.get_threshold()
+                response = {
+                    'metric': metric,
+                    'host': host,
+                    'baseline': baseline.to_dict(),
+                    'thresholds': {
+                        'lower': lower,
+                        'upper': upper
+                    }
+                }
+                self.send_json(response)
+            else:
+                self.send_json({'error': 'No baseline available for metric'}, 404)
+        except Exception as e:
+            self.send_json({'error': str(e)}, 500)
+    
+    def handle_ml_predict(self, query):
+        """GET /api/ml/predict - Forecast future values"""
+        if not ML_AVAILABLE:
+            self.send_json({'error': 'ML module not available'}, 501)
+            return
+        
+        if not HAS_STORAGE:
+            self.send_json({'error': 'Storage not available'}, 500)
+            return
+        
+        metric = query.get('metric', [''])[0]
+        if not metric:
+            self.send_json({'error': 'metric parameter required'}, 400)
+            return
+        
+        host = query.get('host', ['localhost'])[0]
+        horizon = query.get('horizon', ['1h'])[0]
+        
+        # Parse horizon (e.g., '1h', '2h')
+        try:
+            horizon_hours = int(horizon.rstrip('h'))
+        except ValueError:
+            self.send_json({'error': 'Invalid horizon format (use: 1h, 2h, etc.)'}, 400)
+            return
+        
+        detector = get_anomaly_detector()
+        if detector is None:
+            self.send_json({'error': 'Failed to initialize anomaly detector'}, 500)
+            return
+        
+        try:
+            predictions = detector.forecast(metric, horizon_hours, host)
+            if predictions:
+                response = {
+                    'metric': metric,
+                    'host': host,
+                    'horizon_hours': horizon_hours,
+                    'predictions': [
+                        {'timestamp': ts, 'value': val}
+                        for ts, val in predictions
+                    ]
+                }
+                self.send_json(response)
+            else:
+                self.send_json({'error': 'Insufficient data for prediction'}, 404)
+        except Exception as e:
+            self.send_json({'error': str(e)}, 500)
     
     def send_dashboard(self):
         html = """
@@ -468,6 +712,11 @@ class SysMonitorHandler(BaseHTTPRequestHandler):
         <p><code>GET /api/metrics/history?metric=cpu.total_usage&duration=1h&limit=100</code> - Historical data</p>
         <p><code>GET /api/metrics/types</code> - List all available metrics</p>
         <p><code>GET /api/stream</code> - Server-Sent Events stream (real-time)</p>
+        <h4 style="margin-top: 15px; color: #00d4ff;">ML Endpoints (Week 7)</h4>
+        <p><code>POST /api/ml/train</code> - Train ML models (body: {metric, host, hours})</p>
+        <p><code>GET /api/ml/detect?metric=X</code> - Run anomaly detection</p>
+        <p><code>GET /api/ml/baseline?metric=X</code> - Get learned baseline</p>
+        <p><code>GET /api/ml/predict?metric=X&horizon=1h</code> - Forecast future values</p>
     </div>
     </div>
 </body>

@@ -1,0 +1,45 @@
+# SysMonitor Aggregator Dockerfile
+# Python-based aggregator service
+
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    sqlite3 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --no-create-home --shell /usr/sbin/nologin sysmon
+
+# Set working directory
+WORKDIR /opt/sysmon
+
+# Copy Python code
+COPY python/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY python/sysmon ./sysmon
+
+# Create directories
+RUN mkdir -p /var/lib/sysmon /etc/sysmon \
+    && chown -R sysmon:sysmon /var/lib/sysmon /opt/sysmon
+
+# Copy default config
+COPY config/sysmon.yaml.example /etc/sysmon/config.yaml
+
+# Switch to non-root user
+USER sysmon
+
+# Expose API port
+EXPOSE 9000
+
+# Expose volumes
+VOLUME ["/var/lib/sysmon"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:9000/health || exit 1
+
+# Run aggregator
+ENV PYTHONPATH=/opt/sysmon
+CMD ["python3", "-m", "sysmon.aggregator.server", "--port", "9000", "--db", "/var/lib/sysmon/aggregator.db"]

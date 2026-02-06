@@ -1,0 +1,52 @@
+# SysMonitor Agent Configuration (Week 6 - Service Discovery + TLS)
+# =====================================================================
+
+# Agent mode: local, distributed, or hybrid
+mode: distributed
+
+# Service Discovery Configuration
+# ================================
+# Method: none (static config), mdns (auto-discover), consul, static
+discovery_method: mdns
+
+# Consul settings (only if discovery_method = consul)
+consul_addr: http://localhost:8500
+consul_service_tag: production
+
+# Discovery timeout in seconds
+discovery_timeout_seconds: 5.0
+
+# Aggregator Configuration
+# =========================
+# Static URL (used if discovery_method = none or as fallback)
+aggregator_url: http://192.168.1.100:9000
+
+# Authentication token (required for distributed mode)
+auth_token: your-secret-token-here
+
+# Push interval in milliseconds (how often to send metrics)
+push_interval_ms: 5000
+
+# Maximum queue size (metrics buffered if aggregator unavailable)
+max_queue_size: 1000
+
+# Retry settings
+retry_max_attempts: 3
+retry_base_delay_ms: 1000
+
+# TLS Configuration
+# =================
+tls_enabled: false
+tls_verify_peer: true
+# tls_ca_cert: /path/to/ca.crt
+
+# Host identification
+hostname: ""  # Auto-detected if empty
+
+# Host tags for grouping/filtering (optional)
+# tags: environment=production,datacenter=us-east-1,role=webserver
+
+# Timeouts
+# ========
+http_timeout_ms: 10000
+connection_timeout_ms: 5000
